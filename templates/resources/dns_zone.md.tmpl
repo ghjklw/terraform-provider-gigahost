@@ -34,7 +34,7 @@ removes existing DS records.
 {{ tffile "examples/resources/gigahost_dns_zone/secondary.tf" }}
 
 SLAVE zones use the panel's undocumented `POST /dns/zones/secondary`
-endpoint. Changing the master servers replaces the zone.
+endpoint. Changing the master servers updates the zone in place and requests a new transfer.
 
 {{ .SchemaMarkdown | trimspace }}
 {{- if .HasImport }}

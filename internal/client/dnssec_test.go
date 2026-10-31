@@ -208,3 +208,38 @@ func TestGetExternalDSRecords(t *testing.T) {
 		t.Fatalf("unexpected external DS records: %+v", records)
 	}
 }
+
+func TestUpdateSecondaryMasters(t *testing.T) {
+	var got updateSecondaryMastersRequest
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/dns/zones/7/secondary" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		_, _ = io.WriteString(w, `{"meta":{"status":200}}`)
+	})
+	if err := c.UpdateSecondaryMasters(context.Background(), "7", []string{"192.0.2.9"}); err != nil {
+		t.Fatalf("UpdateSecondaryMasters: %v", err)
+	}
+	if !reflect.DeepEqual(got.Masters, []string{"192.0.2.9"}) {
+		t.Fatalf("body = %+v", got)
+	}
+	if err := c.UpdateSecondaryMasters(context.Background(), "7", nil); err == nil {
+		t.Error("expected an error without masters")
+	}
+}
+
+func TestSecondaryUnavailable(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = io.WriteString(w, `{"meta":{"status":403,"message":"Secondary DNS is not available at the moment."}}`)
+	})
+	if err := c.UpdateSecondaryMasters(context.Background(), "7", []string{"192.0.2.9"}); !errors.Is(err, ErrSecondaryUnavailable) {
+		t.Errorf("update err = %v", err)
+	}
+	if _, err := c.CreateSecondaryZone(context.Background(), "example.com", []string{"192.0.2.9"}); !errors.Is(err, ErrSecondaryUnavailable) {
+		t.Errorf("create err = %v", err)
+	}
+}

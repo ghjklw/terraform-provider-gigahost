@@ -12,8 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -84,10 +82,9 @@ func masterServersSchema() schema.SetAttribute {
 	return schema.SetAttribute{
 		Optional:    true,
 		ElementType: types.StringType,
-		MarkdownDescription: "Primary DNS server IPs for a SLAVE zone. Changing the masters replaces the zone. " +
-			"This uses the secondary-zone creation API observed in the Gigahost panel (not publicly documented).",
-		Validators:    []validator.Set{setvalidator.SizeAtLeast(1)},
-		PlanModifiers: []planmodifier.Set{setplanmodifier.RequiresReplace()},
+		MarkdownDescription: "Primary DNS server IPs for a SLAVE zone. Changing the masters updates the zone in place and requests a transfer. " +
+			"This uses the secondary-zone API observed in the Gigahost panel (not publicly documented).",
+		Validators: []validator.Set{setvalidator.SizeAtLeast(1)},
 	}
 }
 
@@ -135,6 +132,22 @@ func dsKeyType(keyType types.Int64) *int64 {
 func (r *dnsZoneResource) applyZoneSettings(ctx context.Context, zoneID string, old, next dnsZoneResourceModel) error {
 	if !next.ExternalDSRecords.IsNull() && (next.DNSSECEnabled.IsNull() || !next.DNSSECEnabled.ValueBool()) {
 		return fmt.Errorf("external_ds_records requires dnssec_enabled = true")
+	}
+
+	if !next.Masters.IsNull() && strings.EqualFold(next.ZoneType.ValueString(), "SLAVE") {
+		desired, err := listZoneStrings(ctx, next.Masters)
+		if err != nil {
+			return fmt.Errorf("masters: %w", err)
+		}
+		existing, err := listZoneStrings(ctx, old.Masters)
+		if err != nil {
+			return fmt.Errorf("previous masters: %w", err)
+		}
+		if old.Masters.IsNull() || !sameZoneNameservers(desired, existing) {
+			if err := r.client.UpdateSecondaryMasters(ctx, zoneID, desired); err != nil {
+				return fmt.Errorf("update masters: %w", err)
+			}
+		}
 	}
 
 	nameserversChanged := false

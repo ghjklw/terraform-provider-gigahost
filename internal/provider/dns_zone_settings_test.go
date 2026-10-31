@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/pigeon-as/terraform-provider-gigahost/internal/client"
@@ -153,5 +154,43 @@ func TestDNSZoneSettingsMissingDSRecordsEnablement(t *testing.T) {
 	}
 	if err := r.applyZoneSettings(context.Background(), "195", dnsZoneResourceModel{}, next); err == nil {
 		t.Fatal("external DS records should require enabled DNSSEC")
+	}
+}
+
+func TestDNSZoneMastersUpdateInPlace(t *testing.T) {
+	var requests []string
+	c := mockZoneClient(t, func(w http.ResponseWriter, req *http.Request) {
+		requests = append(requests, req.Method+" "+req.URL.Path)
+		_, _ = io.WriteString(w, `{"meta":{"status":200}}`)
+	})
+	r := &dnsZoneResource{client: c}
+	ctx := context.Background()
+	base := dnsZoneResourceModel{
+		ZoneType:          types.StringValue("SLAVE"),
+		Nameservers:       types.SetNull(types.StringType),
+		ExternalDSRecords: types.SetNull(externalDSRecordType()),
+	}
+	old, next := base, base
+	old.Masters = zoneSet("192.0.2.1")
+	next.Masters = zoneSet("192.0.2.1")
+	if err := r.applyZoneSettings(ctx, "7", old, next); err != nil || len(requests) != 0 {
+		t.Fatalf("unchanged masters: err=%v requests=%v", err, requests)
+	}
+	next.Masters = zoneSet("192.0.2.9")
+	if err := r.applyZoneSettings(ctx, "7", old, next); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"PUT /dns/zones/7/secondary"}; !reflect.DeepEqual(requests, want) {
+		t.Fatalf("requests %v, want %v", requests, want)
+	}
+}
+
+func TestDNSZoneMastersNotReplaceOnChange(t *testing.T) {
+	r := &dnsZoneResource{}
+	var resp resource.SchemaResponse
+	r.Schema(context.Background(), resource.SchemaRequest{}, &resp)
+	attr := resp.Schema.Attributes["masters"]
+	if mods := attr.(interface{ SetPlanModifiers() []planmodifier.Set }).SetPlanModifiers(); len(mods) != 0 {
+		t.Fatalf("masters must not have plan modifiers, got %d", len(mods))
 	}
 }
