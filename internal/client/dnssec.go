@@ -132,3 +132,22 @@ func (c *Client) SubmitExternalDSRecords(ctx context.Context, zoneID string, rec
 	}
 	return c.sendRequest(req, nil)
 }
+
+// GetExternalDSRecords returns the registry DS records of a domain using
+// external nameservers, allowing Terraform to detect changes made out of band.
+func (c *Client) GetExternalDSRecords(ctx context.Context, zoneID string) ([]DSRecord, error) {
+	if err := validateZoneID(zoneID); err != nil {
+		return nil, err
+	}
+	req, err := c.newRequest(ctx, http.MethodGet, path.Join("dns", "zones", zoneID, "ds-records", "external"), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var data struct {
+		DSRecords []DSRecord `json:"ds_records"`
+	}
+	if err := c.sendRequest(req, &data); err != nil {
+		return nil, err
+	}
+	return data.DSRecords, nil
+}

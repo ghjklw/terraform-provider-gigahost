@@ -187,3 +187,22 @@ func TestCreateSecondaryZone(t *testing.T) {
 		t.Error("expected an error without masters")
 	}
 }
+
+func TestGetExternalDSRecords(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/dns/zones/195/ds-records/external" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"meta":{"status":200},"data":{"ds_records":[{
+			"keyTag":12345,"alg":13,"digestType":2,
+			"digest":"1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF",
+			"publicKey":"Zm9v","keyType":257
+		}],"requires_dnskey":true}}`)
+	})
+	records, err := c.GetExternalDSRecords(context.Background(), "195")
+	if err != nil { t.Fatal(err) }
+	if len(records) != 1 || records[0].KeyTag != 12345 || records[0].Algorithm != 13 ||
+		records[0].PublicKey != "Zm9v" || records[0].KeyType == nil || *records[0].KeyType != 257 {
+		t.Fatalf("unexpected external DS records: %+v", records)
+	}
+}

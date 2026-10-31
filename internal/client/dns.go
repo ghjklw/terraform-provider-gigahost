@@ -46,9 +46,15 @@ type DnsZone struct {
 	ZoneName      string   `json:"zone_name"`
 	ZoneType      string   `json:"zone_type"`
 	ZoneActive    flexBool `json:"zone_active"`
-	ZoneProtected flexBool `json:"zone_protected"`
-	ExternalDNS   flexBool `json:"external_dns"`
-	ZoneMasters   string   `json:"zone_masters"`
+	ZoneProtected flexBool   `json:"zone_protected"`
+	ExternalDNS   flexBool   `json:"external_dns"`
+	ZoneMasters   string     `json:"zone_masters"`
+	DNSSEC        *flexBool  `json:"domain_dnssec"`
+	Nameservers   []string   `json:"nameservers"`
+	Registered    *flexBool  `json:"zone_is_registered"`
+	Suspended     *flexBool  `json:"zone_suspended"`
+	DomainStatus  string     `json:"domain_status"`
+	DomainExpiry  string     `json:"domain_expiry_date"`
 }
 
 type createZoneRequest struct {
