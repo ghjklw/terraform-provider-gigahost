@@ -65,6 +65,7 @@ func (r *dnsZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 				Description:         "Whether the zone is served by external nameservers.",
 				MarkdownDescription: "Whether the zone is served by external nameservers.",
+				PlanModifiers:       []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"zone_active": schema.BoolAttribute{
 				Computed:            true,
@@ -93,12 +94,15 @@ func (r *dnsZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 
 			"registered": schema.BoolAttribute{
 				Computed: true, MarkdownDescription: "Whether the zone represents a registered domain.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
 			"domain_status": schema.StringAttribute{
 				Computed: true, MarkdownDescription: "Domain registration status, if registered.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"domain_expiry_date": schema.StringAttribute{
 				Computed: true, MarkdownDescription: "Domain expiry date, if registered.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"masters": masterServersSchema(),
 			"nameservers": schema.SetAttribute{
@@ -276,7 +280,29 @@ func (r *dnsZoneResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *dnsZoneResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("zone_id"), req, resp)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("zone_id"), req.ID)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// Seed the observed delegation so that an imported registered domain whose
+	// configuration lists its current nameservers plans without changes.
+	zone, err := r.client.GetZone(ctx, req.ID)
+	if err != nil {
+		return // Read reports a missing or unreadable zone.
+	}
+	observed := zone.Nameservers
+	if observed == nil {
+		if observed, err = r.client.ListApexNameservers(ctx, req.ID); err != nil {
+			return
+		}
+	}
+	if len(observed) > 0 {
+		set, diags := types.SetValueFrom(ctx, types.StringType, observed)
+		resp.Diagnostics.Append(diags...)
+		if !diags.HasError() {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("nameservers"), set)...)
+		}
+	}
 }
 
 func dnsZoneToModel(z *client.DnsZone) dnsZoneResourceModel {
