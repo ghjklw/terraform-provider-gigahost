@@ -200,7 +200,9 @@ func TestGetExternalDSRecords(t *testing.T) {
 		}],"requires_dnskey":true}}`)
 	})
 	records, err := c.GetExternalDSRecords(context.Background(), "195")
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(records) != 1 || records[0].KeyTag != 12345 || records[0].Algorithm != 13 ||
 		records[0].PublicKey != "Zm9v" || records[0].KeyType == nil || *records[0].KeyType != 257 {
 		t.Fatalf("unexpected external DS records: %+v", records)

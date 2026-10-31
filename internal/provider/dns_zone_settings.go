@@ -31,12 +31,12 @@ type dsRecordModel struct {
 
 func externalDSRecordType() types.ObjectType {
 	return types.ObjectType{AttrTypes: map[string]attr.Type{
-		"key_tag": types.Int64Type,
-		"algorithm": types.Int64Type,
+		"key_tag":     types.Int64Type,
+		"algorithm":   types.Int64Type,
 		"digest_type": types.Int64Type,
-		"digest": types.StringType,
-		"public_key": types.StringType,
-		"key_type": types.Int64Type,
+		"digest":      types.StringType,
+		"public_key":  types.StringType,
+		"key_type":    types.Int64Type,
 	}}
 }
 
@@ -48,33 +48,33 @@ func externalDSRecordSchema() schema.SetNestedAttribute {
 		Validators: []validator.Set{setvalidator.SizeAtLeast(1)},
 		NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 			"key_tag": schema.Int64Attribute{
-				Required: true,
+				Required:            true,
 				MarkdownDescription: "DNSSEC key tag (0-65535).",
-				Validators: []validator.Int64{int64validator.Between(0, 65535)},
+				Validators:          []validator.Int64{int64validator.Between(0, 65535)},
 			},
 			"algorithm": schema.Int64Attribute{
-				Required: true,
+				Required:            true,
 				MarkdownDescription: "DNSSEC signing algorithm.",
-				Validators: []validator.Int64{int64validator.OneOf(5, 7, 8, 10, 13, 14, 15, 16)},
+				Validators:          []validator.Int64{int64validator.OneOf(5, 7, 8, 10, 13, 14, 15, 16)},
 			},
 			"digest_type": schema.Int64Attribute{
-				Required: true,
+				Required:            true,
 				MarkdownDescription: "Digest type: 1 (SHA-1), 2 (SHA-256) or 4 (SHA-384).",
-				Validators: []validator.Int64{int64validator.OneOf(1, 2, 4)},
+				Validators:          []validator.Int64{int64validator.OneOf(1, 2, 4)},
 			},
 			"digest": schema.StringAttribute{
-				Required: true,
+				Required:            true,
 				MarkdownDescription: "Hexadecimal digest; Gigahost validates its length.",
-				Validators: []validator.String{stringvalidator.RegexMatches(regexp.MustCompile("^[0-9a-fA-F]+$"), "must be hexadecimal")},
+				Validators:          []validator.String{stringvalidator.RegexMatches(regexp.MustCompile("^[0-9a-fA-F]+$"), "must be hexadecimal")},
 			},
 			"public_key": schema.StringAttribute{
-				Optional: true,
+				Optional:            true,
 				MarkdownDescription: "Base64 DNSKEY public key; required for some TLDs (e.g. .be, .de, .eu, .nl).",
 			},
 			"key_type": schema.Int64Attribute{
-				Optional: true,
+				Optional:            true,
 				MarkdownDescription: "DNSKEY flags: 257 (KSK) or 256 (ZSK); used with public_key.",
-				Validators: []validator.Int64{int64validator.OneOf(256, 257)},
+				Validators:          []validator.Int64{int64validator.OneOf(256, 257)},
 			},
 		}},
 	}
@@ -82,11 +82,11 @@ func externalDSRecordSchema() schema.SetNestedAttribute {
 
 func masterServersSchema() schema.SetAttribute {
 	return schema.SetAttribute{
-		Optional: true,
+		Optional:    true,
 		ElementType: types.StringType,
 		MarkdownDescription: "Primary DNS server IPs for a SLAVE zone. Changing the masters replaces the zone. " +
 			"This uses the secondary-zone creation API observed in the Gigahost panel (not publicly documented).",
-		Validators: []validator.Set{setvalidator.SizeAtLeast(1)},
+		Validators:    []validator.Set{setvalidator.SizeAtLeast(1)},
 		PlanModifiers: []planmodifier.Set{setplanmodifier.RequiresReplace()},
 	}
 }
@@ -122,14 +122,16 @@ func sameZoneNameservers(a, b []string) bool {
 	return true
 }
 
-// applyZoneSettings never touches registry settings absent from configuration.
-// Nameservers precede DNSSEC because re-delegation can disable DNSSEC for .no.
 func dsKeyType(keyType types.Int64) *int64 {
-	if keyType.IsNull() || keyType.IsUnknown() { return nil }
+	if keyType.IsNull() || keyType.IsUnknown() {
+		return nil
+	}
 	v := keyType.ValueInt64()
 	return &v
 }
 
+// applyZoneSettings never touches registry settings absent from configuration.
+// Nameservers precede DNSSEC because re-delegation can disable DNSSEC for .no.
 func (r *dnsZoneResource) applyZoneSettings(ctx context.Context, zoneID string, old, next dnsZoneResourceModel) error {
 	if !next.ExternalDSRecords.IsNull() && (next.DNSSECEnabled.IsNull() || !next.DNSSECEnabled.ValueBool()) {
 		return fmt.Errorf("external_ds_records requires dnssec_enabled = true")
@@ -190,14 +192,20 @@ func (r *dnsZoneResource) refreshZoneSettings(ctx context.Context, z *client.Dns
 			// Fallback for API versions not returning nameservers in GET /zones.
 			var err error
 			observed, err = r.client.ListApexNameservers(ctx, zoneID)
-			if err != nil { return fmt.Errorf("read nameservers: %w", err) }
+			if err != nil {
+				return fmt.Errorf("read nameservers: %w", err)
+			}
 		}
 		if len(observed) > 0 {
 			desired, err := listZoneStrings(ctx, state.Nameservers)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			if !sameZoneNameservers(desired, observed) {
 				set, diags := types.SetValueFrom(ctx, types.StringType, observed)
-				if diags.HasError() { return fmt.Errorf("decode observed nameservers: %v", diags) }
+				if diags.HasError() {
+					return fmt.Errorf("decode observed nameservers: %v", diags)
+				}
 				state.Nameservers = set
 			}
 		}
@@ -248,15 +256,19 @@ func (r *dnsZoneResource) refreshZoneSettings(ctx context.Context, z *client.Dns
 		models := make([]dsRecordModel, 0, len(records))
 		for _, d := range records {
 			models = append(models, dsRecordModel{
-				KeyTag: types.Int64Value(d.KeyTag),
-				Algorithm: types.Int64Value(d.Algorithm),
+				KeyTag:     types.Int64Value(d.KeyTag),
+				Algorithm:  types.Int64Value(d.Algorithm),
 				DigestType: types.Int64Value(d.DigestType),
-				Digest: types.StringValue(d.Digest),
-				PublicKey: types.StringNull(),
-				KeyType: types.Int64Null(),
+				Digest:     types.StringValue(d.Digest),
+				PublicKey:  types.StringNull(),
+				KeyType:    types.Int64Null(),
 			})
-			if d.PublicKey != "" { models[len(models)-1].PublicKey = types.StringValue(d.PublicKey) }
-			if d.KeyType != nil { models[len(models)-1].KeyType = types.Int64Value(*d.KeyType) }
+			if d.PublicKey != "" {
+				models[len(models)-1].PublicKey = types.StringValue(d.PublicKey)
+			}
+			if d.KeyType != nil {
+				models[len(models)-1].KeyType = types.Int64Value(*d.KeyType)
+			}
 			// Some registry read responses omit DNSKEY inputs. In that case preserve
 			// the configured optional values for the matching DS tuple.
 			for _, previous := range previouslyManaged {
@@ -266,8 +278,12 @@ func (r *dnsZoneResource) refreshZoneSettings(ctx context.Context, z *client.Dns
 					!strings.EqualFold(previous.Digest.ValueString(), d.Digest) {
 					continue
 				}
-				if d.PublicKey == "" { models[len(models)-1].PublicKey = previous.PublicKey }
-				if d.KeyType == nil { models[len(models)-1].KeyType = previous.KeyType }
+				if d.PublicKey == "" {
+					models[len(models)-1].PublicKey = previous.PublicKey
+				}
+				if d.KeyType == nil {
+					models[len(models)-1].KeyType = previous.KeyType
+				}
 				break
 			}
 		}

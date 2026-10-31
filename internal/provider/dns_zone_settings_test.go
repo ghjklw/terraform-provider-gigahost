@@ -65,22 +65,24 @@ func TestDNSZoneSettingsApplyOrder(t *testing.T) {
 	r := &dnsZoneResource{client: c}
 	ctx := context.Background()
 	records, diags := types.SetValueFrom(ctx, externalDSRecordType(), []dsRecordModel{{
-		KeyTag: types.Int64Value(12345),
-		Algorithm: types.Int64Value(13),
+		KeyTag:     types.Int64Value(12345),
+		Algorithm:  types.Int64Value(13),
 		DigestType: types.Int64Value(2),
-		Digest: types.StringValue("1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF"),
-		PublicKey: types.StringNull(),
-		KeyType: types.Int64Null(),
+		Digest:     types.StringValue("1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF"),
+		PublicKey:  types.StringNull(),
+		KeyType:    types.Int64Null(),
 	}})
-	if diags.HasError() { t.Fatalf("encode DS records: %v", diags) }
+	if diags.HasError() {
+		t.Fatalf("encode DS records: %v", diags)
+	}
 	old := dnsZoneResourceModel{
-		Nameservers: zoneSet("ns1.old.net", "ns2.old.net"),
-		DNSSECEnabled: types.BoolValue(true),
+		Nameservers:       zoneSet("ns1.old.net", "ns2.old.net"),
+		DNSSECEnabled:     types.BoolValue(true),
 		ExternalDSRecords: types.SetNull(externalDSRecordType()),
 	}
 	next := dnsZoneResourceModel{
-		Nameservers: zoneSet("ns1.external.net", "ns2.external.net"),
-		DNSSECEnabled: types.BoolValue(true),
+		Nameservers:       zoneSet("ns1.external.net", "ns2.external.net"),
+		DNSSECEnabled:     types.BoolValue(true),
 		ExternalDSRecords: records,
 	}
 	if err := r.applyZoneSettings(ctx, "195", old, next); err != nil {
@@ -102,9 +104,9 @@ func TestDNSZoneSettingsUnmanaged(t *testing.T) {
 	})
 	r := &dnsZoneResource{client: c}
 	empty := dnsZoneResourceModel{
-		Nameservers: types.SetNull(types.StringType),
+		Nameservers:       types.SetNull(types.StringType),
 		ExternalDSRecords: types.SetNull(externalDSRecordType()),
-		DNSSECEnabled: types.BoolNull(),
+		DNSSECEnabled:     types.BoolNull(),
 	}
 	if err := r.applyZoneSettings(context.Background(), "195", empty, empty); err != nil {
 		t.Fatal(err)
@@ -146,11 +148,10 @@ func TestDNSZoneSettingsDrift(t *testing.T) {
 func TestDNSZoneSettingsMissingDSRecordsEnablement(t *testing.T) {
 	r := &dnsZoneResource{}
 	next := dnsZoneResourceModel{
-		DNSSECEnabled: types.BoolNull(),
+		DNSSECEnabled:     types.BoolNull(),
 		ExternalDSRecords: types.SetValueMust(externalDSRecordType(), []attr.Value{}),
 	}
 	if err := r.applyZoneSettings(context.Background(), "195", dnsZoneResourceModel{}, next); err == nil {
 		t.Fatal("external DS records should require enabled DNSSEC")
 	}
 }
-

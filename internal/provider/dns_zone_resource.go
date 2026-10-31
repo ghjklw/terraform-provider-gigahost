@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/pigeon-as/terraform-provider-gigahost/internal/client"
@@ -33,20 +35,20 @@ type dnsZoneResource struct {
 }
 
 type dnsZoneResourceModel struct {
-	ExternalDns   types.Bool   `tfsdk:"external_dns"`
-	ZoneActive    types.Bool   `tfsdk:"zone_active"`
-	ZoneId        types.String `tfsdk:"zone_id"`
-	ZoneName      types.String `tfsdk:"zone_name"`
-	ZoneProtected types.Bool   `tfsdk:"zone_protected"`
-	ZoneType      types.String `tfsdk:"zone_type"`
-	Registered    types.Bool   `tfsdk:"registered"`
-	Status        types.String `tfsdk:"domain_status"`
-	ExpiryDate    types.String `tfsdk:"domain_expiry_date"`
-	Masters       types.Set    `tfsdk:"masters"`
-	Nameservers   types.Set    `tfsdk:"nameservers"`
-	DNSSECEnabled types.Bool   `tfsdk:"dnssec_enabled"`
-	DNSSECDSRecords types.String `tfsdk:"dnssec_ds_records"`
-	ExternalDSRecords types.Set `tfsdk:"external_ds_records"`
+	ExternalDns       types.Bool   `tfsdk:"external_dns"`
+	ZoneActive        types.Bool   `tfsdk:"zone_active"`
+	ZoneId            types.String `tfsdk:"zone_id"`
+	ZoneName          types.String `tfsdk:"zone_name"`
+	ZoneProtected     types.Bool   `tfsdk:"zone_protected"`
+	ZoneType          types.String `tfsdk:"zone_type"`
+	Registered        types.Bool   `tfsdk:"registered"`
+	Status            types.String `tfsdk:"domain_status"`
+	ExpiryDate        types.String `tfsdk:"domain_expiry_date"`
+	Masters           types.Set    `tfsdk:"masters"`
+	Nameservers       types.Set    `tfsdk:"nameservers"`
+	DNSSECEnabled     types.Bool   `tfsdk:"dnssec_enabled"`
+	DNSSECDSRecords   types.String `tfsdk:"dnssec_ds_records"`
+	ExternalDSRecords types.Set    `tfsdk:"external_ds_records"`
 }
 
 func (r *dnsZoneResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -102,7 +104,7 @@ func (r *dnsZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"nameservers": schema.SetAttribute{
 				Optional: true, ElementType: types.StringType,
 				MarkdownDescription: "Registry nameservers (at least 2) for an existing registered domain. Omitting leaves delegation unmanaged. Gigahost syncs apex NS records, but read-back can lag.",
-				Validators: []validator.Set{setvalidator.SizeAtLeast(2)},
+				Validators:          []validator.Set{setvalidator.SizeAtLeast(2)},
 			},
 			"dnssec_enabled": schema.BoolAttribute{
 				Optional: true, MarkdownDescription: "Enable or disable DNSSEC for a registered domain; nameserver changes are applied first.",
@@ -208,8 +210,12 @@ func (r *dnsZoneResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	previous := state
 	state = dnsZoneToModel(zone)
-	if !previous.ZoneName.IsNull() { state.ZoneName = previous.ZoneName }
-	if !previous.ZoneType.IsNull() { state.ZoneType = previous.ZoneType }
+	if !previous.ZoneName.IsNull() {
+		state.ZoneName = previous.ZoneName
+	}
+	if !previous.ZoneType.IsNull() {
+		state.ZoneType = previous.ZoneType
+	}
 	copyZoneSettings(&state, previous)
 	if err := r.refreshZoneSettings(ctx, zone, &state); err != nil {
 		resp.Diagnostics.AddError("Unable to Read Gigahost Zone Settings", err.Error())
@@ -222,7 +228,9 @@ func (r *dnsZoneResource) Update(ctx context.Context, req resource.UpdateRequest
 	var old, plan dnsZoneResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &old)...)
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() { return }
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	if !plan.Masters.IsNull() && !strings.EqualFold(plan.ZoneType.ValueString(), "SLAVE") {
 		resp.Diagnostics.AddError("Masters Only for SLAVE", "masters requires zone_type = SLAVE.")
 		return
@@ -273,23 +281,29 @@ func (r *dnsZoneResource) ImportState(ctx context.Context, req resource.ImportSt
 
 func dnsZoneToModel(z *client.DnsZone) dnsZoneResourceModel {
 	state := dnsZoneResourceModel{
-		ZoneId:        types.StringValue(z.ZoneID),
-		ZoneName:      types.StringValue(z.ZoneName),
-		ZoneType:      types.StringValue(z.ZoneType),
-		ZoneActive:    types.BoolValue(bool(z.ZoneActive)),
-		ZoneProtected: types.BoolValue(bool(z.ZoneProtected)),
-		ExternalDns:   types.BoolValue(bool(z.ExternalDNS)),
-		Registered:    types.BoolNull(),
-		Status:        types.StringNull(),
-		ExpiryDate:    types.StringNull(),
-		Masters:       types.SetNull(types.StringType),
-		Nameservers:   types.SetNull(types.StringType),
-		DNSSECEnabled: types.BoolNull(),
-		DNSSECDSRecords: types.StringNull(),
+		ZoneId:            types.StringValue(z.ZoneID),
+		ZoneName:          types.StringValue(z.ZoneName),
+		ZoneType:          types.StringValue(z.ZoneType),
+		ZoneActive:        types.BoolValue(bool(z.ZoneActive)),
+		ZoneProtected:     types.BoolValue(bool(z.ZoneProtected)),
+		ExternalDns:       types.BoolValue(bool(z.ExternalDNS)),
+		Registered:        types.BoolNull(),
+		Status:            types.StringNull(),
+		ExpiryDate:        types.StringNull(),
+		Masters:           types.SetNull(types.StringType),
+		Nameservers:       types.SetNull(types.StringType),
+		DNSSECEnabled:     types.BoolNull(),
+		DNSSECDSRecords:   types.StringNull(),
 		ExternalDSRecords: types.SetNull(externalDSRecordType()),
 	}
-	if z.Registered != nil { state.Registered = types.BoolValue(bool(*z.Registered)) }
-	if z.DomainStatus != "" { state.Status = types.StringValue(z.DomainStatus) }
-	if z.DomainExpiry != "" { state.ExpiryDate = types.StringValue(z.DomainExpiry) }
+	if z.Registered != nil {
+		state.Registered = types.BoolValue(bool(*z.Registered))
+	}
+	if z.DomainStatus != "" {
+		state.Status = types.StringValue(z.DomainStatus)
+	}
+	if z.DomainExpiry != "" {
+		state.ExpiryDate = types.StringValue(z.DomainExpiry)
+	}
 	return state
 }

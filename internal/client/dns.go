@@ -42,19 +42,19 @@ func (n *flexInt64) UnmarshalJSON(data []byte) error {
 }
 
 type DnsZone struct {
-	ZoneID        string   `json:"zone_id"`
-	ZoneName      string   `json:"zone_name"`
-	ZoneType      string   `json:"zone_type"`
-	ZoneActive    flexBool `json:"zone_active"`
-	ZoneProtected flexBool   `json:"zone_protected"`
-	ExternalDNS   flexBool   `json:"external_dns"`
-	ZoneMasters   string     `json:"zone_masters"`
-	DNSSEC        *flexBool  `json:"domain_dnssec"`
-	Nameservers   []string   `json:"nameservers"`
-	Registered    *flexBool  `json:"zone_is_registered"`
-	Suspended     *flexBool  `json:"zone_suspended"`
-	DomainStatus  string     `json:"domain_status"`
-	DomainExpiry  string     `json:"domain_expiry_date"`
+	ZoneID        string    `json:"zone_id"`
+	ZoneName      string    `json:"zone_name"`
+	ZoneType      string    `json:"zone_type"`
+	ZoneActive    flexBool  `json:"zone_active"`
+	ZoneProtected flexBool  `json:"zone_protected"`
+	ExternalDNS   flexBool  `json:"external_dns"`
+	ZoneMasters   string    `json:"zone_masters"`
+	DNSSEC        *flexBool `json:"domain_dnssec"`
+	Nameservers   []string  `json:"nameservers"`
+	Registered    *flexBool `json:"zone_is_registered"`
+	Suspended     *flexBool `json:"zone_suspended"`
+	DomainStatus  string    `json:"domain_status"`
+	DomainExpiry  string    `json:"domain_expiry_date"`
 }
 
 type createZoneRequest struct {
